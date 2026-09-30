@@ -1,7 +1,7 @@
 # Documento de Evidencias — Taller AI-Native Software Engineer
 
 **Asignatura:** Ingeniería de Software I
-**Estudiante:** Santiago Avila
+**Estudiante:** Santiago Avila Gómez - 20201020065
 **Repositorio:** https://github.com/SantiagoAvila21/Taller-IA-Native-2026
 **Lenguaje:** Python 3
 **Herramienta de IA utilizada:** Asistente de programación con IA (opencode) integrado en VS Code
@@ -115,17 +115,8 @@ Las pruebas deben aislarse entre sí limpiando el estado global de tareas.
 
 ## 4. Evidencias
 
-> Reemplazar cada marcador por el pantallazo correspondiente antes de exportar a PDF.
-
-| Evidencia | Archivo / acción |
-|---|---|
-| Código original | `evidencias/codigo_original.png` |
-| Prompt inicial | `evidencias/prompt_inicial.png` |
-| Respuesta de la IA | `evidencias/respuesta_ia.png` |
-| Código corregido | `evidencias/codigo_corregido.png` |
-| Ejecución del programa | `evidencias/ejecucion_programa.png` |
-| Ejecución de pruebas | `evidencias/ejecucion_pruebas.png` |
-| Resultado final | `evidencias/resultado_final.png` |
+Las evidencias se presentan en forma de comandos reproducibles y resultados de
+ejecución (sin capturas de pantalla).
 
 ### Comandos reproducibles
 
