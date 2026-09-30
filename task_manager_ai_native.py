@@ -1,35 +1,110 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+    TK_AVAILABLE = True
+except ImportError:  # pragma: no cover - solo ocurre en entornos sin GUI
+    tk = None
+    ttk = None
+    messagebox = None
+    TK_AVAILABLE = False
 
+
+VALID_USERS = ("ana", "jorge", "jojo")
+MAX_TITLE_LENGTH = 100
 
 tasks = []
 
 
+class TaskError(Exception):
+    """Error de negocio del gestor de tareas (validación o acceso)."""
+
+
+def validate_user(user):
+    if user not in VALID_USERS:
+        raise TaskError(f"Usuario no válido: {user!r}")
+    return user
+
+
+def validate_title(title):
+    if not isinstance(title, str):
+        raise TaskError("El título debe ser texto.")
+    clean_title = title.strip()
+    if not clean_title:
+        raise TaskError("El título no puede estar vacío.")
+    if len(clean_title) > MAX_TITLE_LENGTH:
+        raise TaskError(
+            f"El título no puede superar {MAX_TITLE_LENGTH} caracteres."
+        )
+    return clean_title
+
+
+def validate_index(index):
+    # DECISIÓN DEL DESARROLLADOR:
+    # Se rechazan bool y negativos de forma explícita: True/False son
+    # subclases de int y un índice negativo permitiría acceder a tareas
+    # de forma confusa. Todo índice inválido se reporta con TaskError.
+    if isinstance(index, bool) or not isinstance(index, int):
+        raise TaskError("El índice debe ser un número entero.")
+    if index < 0:
+        raise TaskError("El índice no puede ser negativo.")
+    return index
+
+
 def add_task(title, user):
-    tasks.append({
-        "title": title,
+    validate_user(user)
+    clean_title = validate_title(title)
+    task = {
+        "title": clean_title,
         "user": user,
         "completed": False
-    })
+    }
+    tasks.append(task)
+    return task
 
 
 def list_tasks(user):
-    return tasks
+    # CORRECCIÓN (fuga de información):
+    # Antes devolvía la lista global `tasks`, por lo que cualquier
+    # usuario veía las tareas de los demás. Ahora solo se devuelven
+    # las tareas cuyo propietario es `user`.
+    validate_user(user)
+    return [task for task in tasks if task["user"] == user]
+
+
+def _resolve_task(index, user):
+    """Devuelve (posición_global, tarea) del índice visible para `user`.
+
+    El índice que maneja la interfaz es el de la lista filtrada del
+    usuario. Aquí se traduce a la posición real dentro de la lista
+    global para poder modificar o eliminar la tarea correcta.
+    """
+    validate_user(user)
+    validate_index(index)
+
+    user_tasks = [
+        (position, task)
+        for position, task in enumerate(tasks)
+        if task["user"] == user
+    ]
+
+    if index >= len(user_tasks):
+        raise TaskError(
+            f"Índice fuera de rango: {index}. "
+            f"El usuario {user} tiene {len(user_tasks)} tarea(s)."
+        )
+
+    return user_tasks[index]
 
 
 def complete_task(index, user):
-    # Usa la lista visible para el usuario actual.
-    # Cuando list_tasks() sea corregida, esta operación también
-    # quedará limitada a sus propias tareas.
-    user_tasks = list_tasks(user)
-    user_tasks[index]["completed"] = True
+    _, task = _resolve_task(index, user)
+    task["completed"] = True
     return "Tarea completada"
 
 
 def delete_task(index, user):
-    # Usa la lista visible para el usuario actual.
-    user_tasks = list_tasks(user)
-    user_tasks.pop(index)
+    position, _ = _resolve_task(index, user)
+    tasks.pop(position)
     return "Tarea eliminada"
 
 
@@ -263,10 +338,13 @@ class TaskManagerApp:
         self.refresh_tasks()
 
     def create_task(self):
-        title = self.task_title.get()
         user = self.current_user.get()
 
-        add_task(title, user)
+        try:
+            add_task(self.task_title.get(), user)
+        except TaskError as error:
+            messagebox.showwarning("Datos inválidos", str(error))
+            return
 
         self.task_title.set("")
         self.refresh_tasks()
@@ -276,35 +354,57 @@ class TaskManagerApp:
         )
 
     def get_index(self):
-        return int(self.task_index.get())
+        # CORRECCIÓN:
+        # Antes se hacía int() directamente y con la entrada vacía o no
+        # numérica el callback fallaba sin control. Ahora se valida y se
+        # lanza un TaskError con un mensaje comprensible.
+        raw_value = self.task_index.get().strip()
+
+        if not raw_value:
+            raise TaskError(
+                "Ingrese o seleccione el índice de una tarea."
+            )
+
+        try:
+            return int(raw_value)
+        except ValueError:
+            raise TaskError("El índice debe ser un número entero.")
 
     def complete_selected(self):
-        user = self.current_user.get()
-        index = self.get_index()
-
         try:
+            user = self.current_user.get()
+            index = self.get_index()
             result = complete_task(index, user)
-            self.refresh_tasks()
-            self.status_text.set(result)
-        except Exception as error:
+        except TaskError as error:
+            messagebox.showwarning("Operación no permitida", str(error))
+            return
+        except Exception as error:  # pragma: no cover - red de seguridad
             messagebox.showerror(
-                "Error durante la operación",
+                "Error inesperado",
                 f"{type(error).__name__}: {error}"
             )
+            return
+
+        self.refresh_tasks()
+        self.status_text.set(result)
 
     def delete_selected(self):
-        user = self.current_user.get()
-        index = self.get_index()
-
         try:
+            user = self.current_user.get()
+            index = self.get_index()
             result = delete_task(index, user)
-            self.refresh_tasks()
-            self.status_text.set(result)
-        except Exception as error:
+        except TaskError as error:
+            messagebox.showwarning("Operación no permitida", str(error))
+            return
+        except Exception as error:  # pragma: no cover - red de seguridad
             messagebox.showerror(
-                "Error durante la operación",
+                "Error inesperado",
                 f"{type(error).__name__}: {error}"
             )
+            return
+
+        self.refresh_tasks()
+        self.status_text.set(result)
 
     def on_task_selected(self, event=None):
         selected = self.tree.selection()
@@ -323,13 +423,9 @@ class TaskManagerApp:
 
         user = self.current_user.get()
 
-        # ========================================================
-        # PROBLEMA INTENCIONAL DEL TALLER
-        # ========================================================
-        # La interfaz ya conoce el usuario actual, pero la función
-        # list_tasks() todavía devuelve todas las tareas.
-        # El estudiante debe corregir esta parte para que solo se
-        # muestren las tareas del usuario seleccionado.
+        # CORRECCIÓN:
+        # list_tasks(user) ahora filtra por propietario, por lo que la
+        # tabla solo muestra las tareas del usuario activo.
         visible_tasks = list_tasks(user)
 
         for i, task in enumerate(visible_tasks):
@@ -352,6 +448,12 @@ class TaskManagerApp:
 
 
 def main():
+    if not TK_AVAILABLE:
+        raise RuntimeError(
+            "Tkinter no está disponible en este entorno. "
+            "Instale python3-tk para ejecutar la interfaz gráfica."
+        )
+
     root = tk.Tk()
     TaskManagerApp(root)
     root.mainloop()
